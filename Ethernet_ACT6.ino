@@ -1,19 +1,16 @@
 #include <UIPEthernet.h>
 
-// --- Definición de pines ---
-const int PIN_LED = 26;
+// --- Definición de pines lógicos ---
+const int PIN_LED = 4;
 const int PIN_CS_ETHERNET = 5;
 
-// --- Configuración de red ---
-// Dirección MAC física (debe ser única en tu red local)
+// Dirección MAC arbitraria
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
-// Dirección IP estática
+// Sustituir según la red del enrutador doméstico
 IPAddress ip(192, 168, 1, 25);
 
-// Iniciar el servidor TCP en el puerto HTTP estándar
 EthernetServer servidor(80);
-
 bool estadoLED = false;
 
 void setup() {
@@ -22,19 +19,19 @@ void setup() {
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
 
-  Serial.println("\n--- Iniciando Servidor Web ENC28J60 ---");
+  Serial.println("\n--- Iniciando Servidor Web ENC28J60 (Modo Enrutador) ---");
 
-  // Configurar el pin CS e iniciar el módulo de red
+  // Inicializar comunicación SPI y levantar la pila TCP/IP
   Ethernet.init(PIN_CS_ETHERNET);
   Ethernet.begin(mac, ip);
   servidor.begin();
 
-  Serial.print("Servidor web local iniciado en IP: ");
+  Serial.print("[INFO] Servidor web local iniciado en IP: ");
   Serial.println(Ethernet.localIP());
 }
 
 void loop() {
-  // Escuchar a los clientes entrantes
+  // Escuchar a los clientes HTTP en la red local
   EthernetClient cliente = servidor.available();
 
   if (cliente) {
@@ -45,27 +42,27 @@ void loop() {
         char c = cliente.read();
         peticion += c;
 
-        // Una petición HTTP válida termina con una línea en blanco (\r\n\r\n)
+        // Validar el final de la cabecera HTTP (\r\n\r\n)
         if (c == '\n' && peticion.endsWith("\r\n\r\n")) {
 
-          // Analizar la cabecera HTTP para buscar los comandos del LED
+          // Procesamiento de comandos URI
           if (peticion.indexOf("GET /encender") != -1) {
             estadoLED = true;
             digitalWrite(PIN_LED, HIGH);
-            Serial.println("[HTTP] Comando recibido: LED ENCENDIDO");
+            Serial.println("[HTTP] Comando ejecutado: LED ENCENDIDO");
           } else if (peticion.indexOf("GET /apagar") != -1) {
             estadoLED = false;
             digitalWrite(PIN_LED, LOW);
-            Serial.println("[HTTP] Comando recibido: LED APAGADO");
+            Serial.println("[HTTP] Comando ejecutado: LED APAGADO");
           }
 
-          // Enviar código de respuesta HTTP 200 OK
+          // Cabeceras de respuesta HTTP 200 OK
           cliente.println("HTTP/1.1 200 OK");
           cliente.println("Content-Type: text/html");
           cliente.println("Connection: close");
           cliente.println();
 
-          // Renderizar la interfaz web en HTML
+          // Interfaz de Usuario HTML
           cliente.println("<!DOCTYPE HTML>");
           cliente.println("<html><head><title>Control IoT Ethernet</title>");
           cliente.println("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
@@ -77,17 +74,16 @@ void loop() {
           cliente.print(estadoLED ? "<span style='color:green;'>ENCENDIDO</span>" : "<span style='color:red;'>APAGADO</span>");
           cliente.println("</h2>");
 
-          // Botones que envían las peticiones HTTP al microcontrolador
           cliente.println("<button onclick=\"location.href='/encender'\">Encender LED</button>");
           cliente.println("<button onclick=\"location.href='/apagar'\">Apagar LED</button>");
           cliente.println("</body></html>");
 
-          break;  // Salir del bucle una vez entregada la página
+          break;  // Finalizar transmisión de la página
         }
       }
     }
 
-    // Dar un breve tiempo al navegador para recibir los datos antes de cerrar
+    // Margen de seguridad para cerrar la conexión TCP
     delay(10);
     cliente.stop();
   }
